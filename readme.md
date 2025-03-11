@@ -1,29 +1,167 @@
-# Kiwi 数据科学家校招岗位第二轮笔试题——模拟掉落
+# Kiwi 数据科学家校招笔试题 —— 模拟掉落
 
-## 考察目的
-本题用于考察候选人在偏真实的场景下的工程实现能力，与leetcode算法题不太一样。候选人需要根据需求实现一段 C/C++ 代码，并设计一些测试用例通过 python 进行测试。  
-题目可以用一周左右的时间（非硬性要求）在家完成，完成后将结果通过邮件发送给我（huzhongmin@chaofanhy.cn），并抄送hr。提交形式可以是github地址，或直接打包。提交后安排终面。
+## 项目简介
 
-## 背景描述
-我们用一个二维矩阵来表示游戏盘面的信息，二维矩阵中，0表示空位，1表示不可移动的障碍物，其他正整数表示可以移动的物体。   
-因为这是一个竖直摆放的盘面，盘面上的物体会因为重力向下掉落，直到被障碍物、底部或其他物品挡住。此外，物体还可以向斜下方侧滑。  
-请实现一个simulate_drop函数，用于模拟这个掉落的过程，并返回盘面稳定后的结果。
+本项目实现了一个模拟物体“掉落”的算法，用以模拟二维游戏盘面中物体的重力下落过程。盘面使用一个二维矩阵表示，其中：
+- `0` 表示空位，
+- `1` 表示固定障碍（不可移动），
+- 大于 `1` 的正整数表示可移动物体。
 
-## 掉落规则
-1. 盘面的遍历顺序为从左下往右上。
-2. 当物体下方格子为空位时，物体向下掉落一格。
-3. 如果物体下方不是空位，则判断左下方是否是空位，如果是，则侧滑至左下方一格的位置。
-4. 如果物体下方、左下方均不是空位，则判断右下方是否是空位，如果是，则侧滑至右下方一格的位置。
-5. 重复上面的过程，直到物体无法下落或侧滑为止。
-6. 对所有物体执行上述下落操作，直到盘面稳定。
+物体的掉落规则如下：
+1. 下落规则：  
+   - 当物体正下方为空时，下落一格；
+   - 如果正下方不为空，则检查左下方是否为空，若为空则侧滑一格；
+   - 如果左下也不为空，则检查右下方是否为空，若为空则侧滑一格；
+2. 重复上述过程，直到物体无法移动为止；  
+3. 对所有物体重复执行上述操作，直至整个盘面稳定。
 
-## 相关信息和要求
-1. simulate_drop.c 中实现主体部分。
-2. 需要编译成可以被其他语言（例如C#、python）调用的动态库。这里是python。
-3. test_dll.ipynb notebook中对你设计的多个测试用例展示效果。
-4. 虽然我们用二维矩阵来表示游戏盘面的信息，但为了外部语言调用动态库传参方便，一般会扁平化为一维数组。一维数组的坐标规则为：index = col*height + row。 row=0表示最下方, index=0的坐标在盘面左下角。
-5. utils.py 中是一些工具类或函数，例如将一维数组展示成盘面信息的函数等。
-6. 测试用例需要涵盖不同的情形，以充分测试代码在不同情况下的表现。
-7. 从性能角度，建议模拟掉落的操作通过指针做内存映射完成，即让外部调用动态库的语言和C代码操作同一块内存。python的ctypes调用c代码时提供了这种机制。
-8. 如果可能，代码的时间和空间复杂度可以做一些优化。性能也是考察的一个方面。
-9. 项目中提供了一个简单的示例countOnes，计算盘面中的障碍数量。simulate_drop函数的输入同countOnes函数示例。notebook中提供了python通过ctypes调用countOnes的示例。
+## 实现方法
+
+为了全面考察工程实现能力，项目中实现了四种不同的算法版本，每种版本都编译为一个动态库供外部调用：
+
+1. #### **simulate_drop_multi**  
+   
+   采用全盘多次遍历的方式，直至盘面稳定。  
+   **思路**：  
+   
+   ```pseudo
+   changed = true
+   while changed:
+       changed = false
+       for each cell from left-bottom to right-top:
+           if cell contains movable object:
+               if cell below is empty:
+                   move object one step down; changed = true
+               else if left-down is empty:
+                   move object one step left-down; changed = true
+               else if right-down is empty:
+                   move object one step right-down; changed = true
+   ```
+   每次轮询都会扫描整个矩阵。
+   
+2. #### **simulate_drop_single**  
+   
+   对每个物体直接执行“到底”的移动，即从当前格子一路下落到最终停靠位置。  
+   **思路**：  
+   
+   ```pseudo
+   for each cell from left-bottom to right-top:
+       if cell contains movable object:
+           clear current cell
+           while movement possible:
+               if cell below is empty: move down
+               else if left-down is empty: move left-down
+               else if right-down is empty: move right-down
+           set final position to object
+   ```
+   此方法在一次遍历中直接获得最终位置。
+   
+3. #### **simulate_drop_queue**  
+   
+   采用队列驱动（事件驱动）的方式：  
+   **思路**：  
+   
+   ```pseudo
+   initialize queue with all movable objects
+   while queue not empty:
+       cell = dequeue
+       if object in cell can move (check down, then left-down, then right-down):
+           move object one step
+           enqueue destination cell and affected neighbor(s)
+   ```
+   这种方法只处理“活跃区域”，但其更新顺序依赖队列顺序，可能导致与全盘扫描的结果不一致。
+   
+4. #### **simulate_drop_active (本次重点改进版)**  
+   
+   使用“稳定标记与依赖传播”的策略，避免对已经稳定的区域进行重复检查，同时仅在支撑条件（下方区域）变化时重新激活上方受影响的格子。  
+   **核心思路**：
+   
+   - 为每个格子维护一个 `stable` 标记。如果一个物体的下方、左下、右下都不为空（即为障碍或者已稳定的物体），则标记为稳定，不再重复检查；
+   - 当一个物体移动后，其原位置变为空，则传播依赖：仅当支撑发生变化时，将其上方邻域（左上、正上、右上）标记为“不稳定”，重新加入待检查队列；
+   - 一旦一个格子稳定，且其下方支撑没有变化，则不会被重新激活，从而避免了冗余的全盘扫描。
+   
+   **伪代码**：
+   ```pseudo
+   Initialize stable[] to false for all cells
+   Build active list with all movable objects
+   
+   while active list is not empty:
+       sort active list (from left-bottom to right-top)
+       new_active = empty list
+   
+       for each cell in active list:
+           if cell is not movable or is already stable:
+               continue
+   
+           if movement possible (check down, left-down, right-down):
+               move object one step to destination
+               mark destination as unstable
+               add destination to new_active
+               // Dependency propagation:
+               for each cell in the upper neighborhood (left-up, up, right-up):
+                   if contains movable object and is marked stable:
+                       mark as unstable
+                       add to new_active
+           else:
+               if no support (i.e., at least one of down, left-down, right-down is empty):
+                   // 保持不稳定，重新加入待检查队列
+                   add cell to new_active
+               else:
+                   // 支撑完备：标记为稳定，不再加入
+                   mark cell as stable
+   
+       active list = new_active
+   ```
+   该方法尽可能仅对受到支撑变化影响的区域进行检查，从而在大多数情况下比全盘扫描更高效。
+
+## 文件结构
+
+- **simulate_drop.c**  
+  实现了四种模拟掉落的函数：
+  - `simulate_drop_multi`：全盘多次遍历法。
+  - `simulate_drop_single`：单次遍历，直接到底法。
+  - `simulate_drop_queue`：基于队列驱动的事件驱动法。
+  - `simulate_drop_active`：基于稳定标记与依赖传播的局部更新法（如上文代码）。
+
+- **utils.py**  
+  包含 Python 辅助函数及工具：
+  - `IntArrayType`：将 Python 数组转换为 C 数组。
+  - `show_matrix`：将一维数组以矩阵形式显示（旋转90°以使 row=0 为底部）。
+  - 封装了上述 C 函数的调用接口（如 `simulate_drop_multi`, `simulate_drop_single`, `simulate_drop_queue`, `simulate_drop_active`）。
+  - `run_test_case_all_methods`：自动运行测试用例，调用所有模拟函数并记录运行时间、比较结果。
+
+- **test_dll.ipynb**  
+  Jupyter Notebook 测试脚本：
+  - 加载动态库。
+  - 定义各种测试用例（全空、全障碍、单行、单列、小随机、中随机、大矩阵）。
+  - 调用 `run_test_case_all_methods` 运行测试，并打印各算法的运行时间和最终矩阵，比较不同算法之间的结果一致性。
+
+## 结果与讨论
+
+测试结果中显示，对于简单场景（如 AllZero、AllOnes、SingleRow、SingleCol）四种算法均能得到一致的最终矩阵。但在随机测试（RandomMed、RandomBig）中，出现了不同方法最终结果不一致的情况，例如：
+- `simulate_drop_multi` 与 `simulate_drop_single` 可能产生不同的结果；
+- `simulate_drop_queue` 与 `simulate_drop_active` 也可能与全盘扫描版本不同；
+- 一般来说，`simulate_drop_single` 的结果与基于事件驱动的队列方法较为一致。
+
+**原因分析**：
+1. **更新顺序的差异**  
+   - `simulate_drop_multi` 采用全盘多次扫描，严格按照从左下到右上的顺序更新。  
+   - `simulate_drop_single` 对每个物体直接跳至最终位置，其处理方式忽略了中间状态。
+   - 队列驱动 (`simulate_drop_queue`) 与局部更新 (`simulate_drop_active`) 版本由于只更新活跃区域，其激活顺序和依赖传播机制可能导致处理顺序与全盘扫描不同，从而在存在多个相互依赖物体时产生不同的中间状态和最终结果。
+
+2. **局部更新策略和依赖传播**  
+   - 在 `simulate_drop_active` 中，通过稳定标记与依赖传播，仅在下方支撑变化时激活上方邻域。  
+   - 如果某些物体已经被确认稳定，则它们不再检查；但如果支撑条件变化传播不完全或处理顺序略有差异，可能会导致部分物体没有被重新检查，最终结果与全盘扫描的版本不同。
+
+个人认为，这些差异并非算法实现错误，而是不同模拟策略在处理相邻物体滑动、碰撞时的细微顺序差异导致的。实际应用中，可以根据需要选择更符合物理预期或性能要求的算法版本。
+
+## 总结
+
+- 本项目实现了四种掉落模拟算法，各自有不同的实现思路和性能特性。
+- 通过 Python 的 `ctypes` 和 Jupyter Notebook 进行测试，可以直观地对比各算法的运行时间和结果。
+- 关于最终结果的差异，主要是由于不同更新顺序和局部更新策略的差异引起的，这也是本次笔试题希望考察的工程实现与算法细节处理能力。
+
+最后，希望这份文档能帮助面试官快速了解项目完成情况、实现思路和细节设计。 
+
+---
+
