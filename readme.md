@@ -141,7 +141,7 @@
 测试结果中显示，对于简单场景（如 AllZero、AllOnes、SingleRow、SingleCol）四种算法均能得到一致的最终矩阵。但在随机测试（RandomMed、RandomBig）中，出现了不同方法最终结果不一致的情况，例如：
 - `simulate_drop_multi` 与 `simulate_drop_single` 可能产生不同的结果；
 - `simulate_drop_queue` 与 `simulate_drop_active` 也可能与全盘扫描版本不同；
-- 一般来说，`simulate_drop_single` 的结果与基于事件驱动的队列方法较为一致。
+- 一般来说，`simulate_drop_single` 的结果与`simulate_drop_queue`较为一致。
 
 **原因分析**：
 1. **更新顺序的差异**  
